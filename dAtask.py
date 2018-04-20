@@ -19,6 +19,7 @@ def get_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('-cT', '--collectTasks', help='Collect tasks from taskwarrior')
     parser.add_argument('-e', '--eisenTasks', help='Visualize eisen task in Urgency/Priority')
+    parser.add_argument('-cQ', '--changeQuad', help='Change task Urgency/Priority example:"ID HH HL" ')
     return parser
 
 
@@ -57,22 +58,43 @@ def buildEisenStruct(json_tasks):
         
         if (item["priority"]=="H" or item["priority"]=="M") and item["urgency"]>thresh :
             # HH - High Priority - High Urgency
-            eisen_struct["HH"].append(item["id"])
+            eisen_struct["HH"].append({str(item["id"]):item["description"]})
         
         elif (item["priority"]=="H" or item["priority"]=="M") and item["urgency"]<= thresh:
             # HL - High Priority - Low Urgency
-             eisen_struct["HL"].append(item["id"])
+             eisen_struct["HL"].append({str(item["id"]):item["description"]})
         elif (item["priority"]=="L" or item["priority"]=="N") and item["urgency"]>thresh :
             # LH - Low Priority - High Urgency
-            eisen_struct["LH"].append(item["id"])
+            eisen_struct["LH"].append({str(item["id"]):item["description"]})
         elif (item["priority"]=="L" or item["priority"]=="N") and item["urgency"]<= thresh:
             # LL - Low Priority - Low Urgency
-            eisen_struct["LL"].append(item["id"])
+            eisen_struct["LL"].append({str(item["id"]):item["description"]})
             
     return eisen_struct, data_list
 
 
 
+def printHeisenTable(eisen_data):
+    tab_string = {'HH':"High Priority - High Urgency", \
+                  'HL':"High Priority - Low Urgency",\
+                  'LH':"Low Priority - High Urgency",\
+                  'LL':"Low Priority - Low Urgency"}
+    
+    for item in tab_string.keys():
+        if len(eisen_data[item])>0:
+            print tab_string[item]
+            for i in eisen_data[item]:
+                print "--> {}".format(": ".join(i.items()[0]))
+            print "\n"
+    
+    
+def find(lst, key):
+    for i, dic in enumerate(lst):
+        if dic.keys()[0] == key:
+            return i
+    return -1
+    
+    
 if __name__=="__main__":
     parser = get_parser()
     args = parser.parse_args()
@@ -101,10 +123,37 @@ if __name__=="__main__":
             with open(data_path, 'r') as infile:
                 task_data = json.load(infile)
             
-            #TODO: print eisen table
-            print eisen_data
+            printHeisenTable(eisen_data)
         else:
             print "Eisenhower's Urgency/Priority table currently not available. Build one."
             exit 
  
+    if args.changeQuad:
+        # ID HH HL -> 10 HH HL
+        # split input by space
+        input_split = args.changeQuad.split(" ")
+        id_task = input_split[0] #ID
+        id_org_pu = input_split[1] # original priority urgency
+        id_new_pu = input_split[2] # new priority urgency
         
+        # load eisen_task
+        currDir = os.getcwd()
+        eisen_path = os.path.join(currDir, 'eisen_task.txt')
+        if os.path.exists(eisen_path):
+            with open(eisen_path, 'r') as infile:
+                eisen_data = json.load(infile)
+        
+            # move task 
+            # FIND TASK
+            task_loc = find(eisen_data[id_org_pu], id_task)
+            # REMOVE TASK
+            task_string = eisen_data[id_org_pu].pop(task_loc)
+            # ADD TASK
+            eisen_data[id_new_pu].append(task_string)
+            
+            # store eisen_task
+            with open('eisen_task.txt', 'w') as outfile:
+                json.dump(eisen_data, outfile)
+        
+            # update VISUAL
+            printHeisenTable(eisen_data)
